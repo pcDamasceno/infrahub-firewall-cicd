@@ -455,13 +455,18 @@ git commit -m "docs(blog): part 1 — the source of truth"
 - **Acceptance (reader):** `terraform init` resolves `infrahub` from Terralist; the
   `firewall_policy_rules` data source returns `edge-policy`'s rules.
 
-### Part 3 — Dual-provider Terraform, run locally
-- **Goal:** Read policy from Infrahub (data source) and create ACP rules on the DevNet/dCloud FMC
-  (resource via `CiscoDevNet/fmc`).
-- **Key tasks:** reserve the DevNet/dCloud FMC sandbox (document steps); `providers.tf` with both
-  providers; map Infrahub fields → FMC access-rule attributes (+ any prerequisite FMC network/port
-  objects); `terraform plan`/`apply`; verify in the FMC UI. Cover gotchas: FMC domain UUID, auth,
-  rule ordering, idempotency.
+### Part 3 — Dual-provider Terraform, run locally — DRAFTED (FMC half verified live)
+- **Goal:** Read policy from Infrahub (data source) and create ACP rules on FMC via `CiscoDevNet/fmc`.
+- **Status:** Written — `terraform/{providers,variables,main}.tf` + `terraform/example.tfvars` +
+  `blog/part-3-dual-provider-local.md`. **FMC half VERIFIED** against the live DevNet FMC sandbox
+  (`fmcrestapisandbox.cisco.com`, FMC 7.7.12) with CiscoDevNet/fmc **v2.4.0**: created an access
+  policy + access rule (ALLOW, dest `10.10.20.10/32`, tcp/443, log) and destroyed it cleanly.
+  Infrahub→FMC literal hand-off is reader-verified (needs the Part 2 provider built).
+- **Verified gotchas baked in:** target is **FMC, not FDM** (the 10.10.20.65 box was a standalone
+  FDM/FTD 7.0.1 — `CiscoDevNet/fmc` can't manage it); port literals need `type="PortLiteral"` and
+  `protocol` as the **IANA number** (TCP=`6`); DevNet sandbox **caps concurrent tokens** (provider
+  401s "retrieve FMC version" if another token is held); shared sandbox → create own uniquely-named
+  policy/zones; `deploy` (`fmc_ftd_deploy`) usually unavailable on the sandbox.
 - **Acceptance:** `edge-policy`'s permit/deny rules appear in the FMC Access Control Policy.
   Blog: `blog/part-3-dual-provider-local.md`.
 

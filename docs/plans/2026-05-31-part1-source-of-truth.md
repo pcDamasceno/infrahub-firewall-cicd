@@ -432,25 +432,28 @@ git commit -m "docs(blog): part 1 — the source of truth"
 
 ### Validation spikes (resolve before the dependent part)
 
-- **V1 — GitLab as a Terraform *provider* registry (gates Part 2).**
-  Spike: attempt to publish the generated provider to the self-hosted GitLab and `terraform init` it.
-  Acceptance: `terraform init` resolves `infrahub` from GitLab, OR a documented fallback (generic
-  package registry + provider-registry index) works. Output: a short `docs/specs/v1-gitlab-registry.md`
-  recording the working path and the exact endpoint/`GNUmakefile` changes.
+- **V1 — GitLab as a Terraform *provider* registry (gates Part 2). RESOLVED.**
+  Finding: GitLab serves `modules.v1` only, not `providers.v1` (open request gitlab-org/gitlab#356716).
+  Decision: front GitLab with **Terralist** (`providers.v1`), GitLab as artifact store + CI + OAuth.
+  Documented in the design spec and `blog/part-2-build-the-provider.md`.
 
-- **V2 — rule-rendering source (gates Part 2/3).**
-  Spike: decide between an Infrahub generator populating `SecurityRenderedPolicyRule` vs. querying
-  `SecurityPolicyRule` directly. Acceptance: one GraphQL query returns the fields needed to build an
-  FMC access rule (zones, networks, ports, action, log) for `edge-policy`. Output: the chosen `.gql`
-  query saved in `gql/`.
+- **V2 — rule-rendering source (gates Part 2/3). RESOLVED.**
+  Decision: query `SecurityPolicyRule` directly (no generator). The query `gql/firewall_policy_rules.gql`
+  is verified against the live `fw-cicd-demo` branch — returns zones/networks/ports/action/log for
+  `edge-policy` via `policy__name__value` filter + abstract-peer inline fragments.
 
-### Part 2 — Build your own Infrahub Terraform provider
-- **Goal:** Generate the provider from the V2 GQL query and publish it to self-hosted GitLab.
-- **Key tasks:** copy `gql/*.gql` into the provider repo; `export INFRAHUB_SERVER`; `make all`;
-  inspect generated `internal/provider` + `docs/`; retarget GoReleaser env (`TERRAFORM_REGISTRY_ENDPOINT`,
-  `RELEASE_URL`, GitLab token, `GPG_FINGERPRINT`) per V1; tag + `make generate_deploy`.
-- **Acceptance:** `terraform init` in `terraform/` pulls `infrahub` from GitLab; `data "infrahub_..."`
-  returns `edge-policy`'s rules. Blog: `blog/part-2-build-the-provider.md`.
+### Part 2 — Build your own Infrahub Terraform provider — DRAFTED (blog, reader-verified)
+- **Goal:** Generate the provider from the verified GQL query and publish it via Terralist (GitLab-backed).
+- **Status:** Written as `blog/part-2-build-the-provider.md` + `gql/firewall_policy_rules.gql` (verified).
+  The provider build / Terralist deploy / GitLab publish are documented for the user to verify in their
+  own environment (per user's "write the blog with GitLab instructions and I'll verify" direction).
+- **Key facts baked in:** generator turns `gql/` queries → data sources; `sdk/pull_schema.sh` pulls the
+  Infrahub schema for the *current git branch name* (merge `fw-cicd-demo`→main or match branch names);
+  retarget `main.go` Address + goreleaser `gitlab_urls`; publish to Terralist via
+  `POST /v1/api/providers/<authority>/infrahub/<version>/upload`; consume as
+  `source = "<terralist-host>/<authority>/infrahub"`.
+- **Acceptance (reader):** `terraform init` resolves `infrahub` from Terralist; the
+  `firewall_policy_rules` data source returns `edge-policy`'s rules.
 
 ### Part 3 — Dual-provider Terraform, run locally
 - **Goal:** Read policy from Infrahub (data source) and create ACP rules on the DevNet/dCloud FMC

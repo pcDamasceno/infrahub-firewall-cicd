@@ -1,0 +1,60 @@
+# Infrahub Terraform provider — data source query.
+#
+# Verified against the live instance (branch fw-cicd-demo) with execute_graphql:
+# returns each rule's zones, addresses (abstract peer resolved via inline
+# fragments), services, action, log and index — exactly what an FMC access
+# rule needs in Part 3.
+#
+# The marcom4rtinez generator turns a GraphQL *query* into a Terraform *data
+# source*. This parameterized form (a required $policy variable) becomes a
+# data source you call with the policy name, e.g.:
+#   data "infrahub_firewall_policy_rules" "edge" { policy = "edge-policy" }
+
+query FirewallPolicyRules($policy: String!) {
+  SecurityPolicyRule(policy__name__value: $policy) {
+    edges {
+      node {
+        name { value }
+        index { value }
+        action { value }
+        log { value }
+        source_zone { node { name { value } } }
+        destination_zone { node { name { value } } }
+        source_address {
+          edges {
+            node {
+              __typename
+              ... on SecurityIPAddress { name { value } address { value } }
+              ... on SecurityPrefix { name { value } prefix { value } }
+            }
+          }
+        }
+        destination_address {
+          edges {
+            node {
+              __typename
+              ... on SecurityIPAddress { name { value } address { value } }
+              ... on SecurityPrefix { name { value } prefix { value } }
+            }
+          }
+        }
+        source_services {
+          edges {
+            node {
+              __typename
+              ... on SecurityService { name { value } port { value } }
+            }
+          }
+        }
+        destination_services {
+          edges {
+            node {
+              __typename
+              ... on SecurityService { name { value } port { value } }
+            }
+          }
+        }
+      }
+    }
+  }
+}

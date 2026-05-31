@@ -1,0 +1,18 @@
+# Terraform
+.terraform/
+.terraform.lock.hcl
+*.tfstate
+*.tfstate.*
+crash.log
+crash.*.log
+
+# Secrets — never commit credentials
+*.tfvars
+!example.tfvars
+.env
+infrahubctl.toml
+*.auto.tfvars
+
+# OS / editor
+.DS_Store
+*.swp

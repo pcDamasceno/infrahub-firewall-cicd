@@ -1,0 +1,12 @@
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: SecurityIPAddress
+  data:
+    - name: web-server-01
+      address: 10.10.20.10/32
+      description: "DMZ web server"
+    - name: admin-host
+      address: 10.10.10.5/32
+      description: "Inside admin workstation"

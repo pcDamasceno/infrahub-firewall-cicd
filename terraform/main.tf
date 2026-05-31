@@ -26,12 +26,12 @@ data "infrahub_firewall_policy_rules" "this" {
 locals {
   rules = [
     for r in data.infrahub_firewall_policy_rules.this.edges : {
-      name      = r.node.name
-      action    = lower(r.node.action) == "deny" ? "BLOCK" : "ALLOW"
-      log       = try(r.node.log, false)
-      src_zone  = try(r.node.source_zone.name, null)
-      dst_zone  = try(r.node.destination_zone.name, null)
-      dst_nets  = [for a in try(r.node.destination_address, []) : a.address]
+      name     = r.node.name
+      action   = lower(r.node.action) == "deny" ? "BLOCK" : "ALLOW"
+      log      = try(r.node.log, false)
+      src_zone = try(r.node.source_zone.name, null)
+      dst_zone = try(r.node.destination_zone.name, null)
+      dst_nets = [for a in try(r.node.destination_address, []) : a.address]
       # Infrahub services carry a port; protocol defaults to TCP (IANA 6).
       # Map from the service's ip_protocol relationship if you model it.
       dst_ports = [for s in try(r.node.destination_services, []) : { protocol = "6", port = tostring(s.port) }]

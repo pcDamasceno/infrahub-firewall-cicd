@@ -1,0 +1,81 @@
+# Firewall rules as code — GitLab CI pipeline (Part 4)
+#
+# Reads policy from Infrahub and applies it to Cisco Firepower (FMC) via the
+# dual-provider Terraform/OpenTofu config in ../terraform.
+#
+# SETUP (see gitlab/README.md):
+#   - Project ▸ Settings ▸ CI/CD ▸ "CI/CD configuration file" = gitlab/.gitlab-ci.yml
+#     (or move this file to the repo root).
+#   - Add masked + protected CI/CD variables: TF_VAR_infrahub_server,
+#     TF_VAR_infrahub_api_token, TF_VAR_infrahub_branch, TF_VAR_policy_name,
+#     TF_VAR_fmc_url, TF_VAR_fmc_username, TF_VAR_fmc_password.
+#   - State is GitLab-managed (HTTP backend); no extra config needed in CI.
+#
+# Shortcut alternative: include the OpenTofu CI/CD component instead of these
+# explicit jobs — see gitlab/README.md.
+
+stages:
+  - validate
+  - plan
+  - apply
+
+variables:
+  TF_ROOT: ${CI_PROJECT_DIR}/terraform
+  TF_STATE_NAME: firewall
+  TF_ADDRESS: ${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/terraform/state/${TF_STATE_NAME}
+
+default:
+  image:
+    name: ghcr.io/opentofu/opentofu:1.9.0
+    entrypoint: [""]
+  cache:
+    key: "${TF_STATE_NAME}"
+    paths:
+      - ${TF_ROOT}/.terraform
+  before_script:
+    - cd "${TF_ROOT}"
+    - tofu --version
+    - tofu init
+        -backend-config="address=${TF_ADDRESS}"
+        -backend-config="lock_address=${TF_ADDRESS}/lock"
+        -backend-config="unlock_address=${TF_ADDRESS}/lock"
+        -backend-config="username=gitlab-ci-token"
+        -backend-config="password=${CI_JOB_TOKEN}"
+        -backend-config="lock_method=POST"
+        -backend-config="unlock_method=DELETE"
+        -backend-config="retry_wait_min=5"
+
+validate:
+  stage: validate
+  script:
+    - tofu fmt -check -recursive
+    - tofu validate
+
+plan:
+  stage: plan
+  script:
+    - tofu plan -out="planfile"
+    - tofu show -json "planfile" > "plan.json"
+  artifacts:
+    paths:
+      - ${TF_ROOT}/planfile
+    reports:
+      terraform: ${TF_ROOT}/plan.json   # renders the plan summary on the MR
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+    - if: $CI_PIPELINE_SOURCE == "trigger"   # fired by the Infrahub webhook
+
+apply:
+  stage: apply
+  script:
+    - tofu apply -auto-approve "planfile"
+  dependencies:
+    - plan
+  environment:
+    name: firepower
+  rules:
+    # Auto-apply on the default branch and on Infrahub-triggered pipelines
+    # (the merge→deploy loop). Change to `when: manual` for an approval gate.
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+    - if: $CI_PIPELINE_SOURCE == "trigger"

@@ -470,14 +470,19 @@ git commit -m "docs(blog): part 1 — the source of truth"
 - **Acceptance:** `edge-policy`'s permit/deny rules appear in the FMC Access Control Policy.
   Blog: `blog/part-3-dual-provider-local.md`.
 
-### Part 4 — The pipeline
-- **Goal:** GitLab CI runs `init/plan/apply`; state in GitLab; plan posted on the MR; triggered by an
-  Infrahub webhook on merge.
-- **Key tasks:** `.gitlab-ci.yml` (init pulls infrahub from GitLab + fmc from public registry; plan as
-  artifact + MR note; apply gated on protected branch/manual); GitLab HTTP backend for TF state; secrets
-  as masked + protected CI variables (`INFRAHUB_API_TOKEN`, FMC creds); Infrahub webhook → pipeline
-  trigger token.
-- **Acceptance:** merging an MR triggers a green pipeline that applies to FMC.
+### Part 4 — The pipeline — DRAFTED (reader-verified)
+- **Goal:** GitLab CI runs `validate/plan/apply`; state in GitLab; plan posted on the MR; triggered by
+  an Infrahub webhook on merge.
+- **Status:** Written — `gitlab/.gitlab-ci.yml` (OpenTofu, explicit init/validate/plan/apply, no
+  external component dependency), `gitlab/README.md` (setup + CI vars + webhook), `terraform/backend.tf`
+  (GitLab-managed HTTP state), `blog/part-4-the-pipeline.md`. **Verified locally:** the CI YAML parses
+  and `terraform fmt -check`/`validate` pass; the FMC apply itself was proven in Part 3. The live
+  pipeline run + Infrahub→GitLab webhook are reader-verified on the user's GitLab.
+- **Key facts baked in:** OpenTofu (post-Terraform-BSL, GitLab-recommended); HTTP backend
+  `…/projects/:id/terraform/state/firewall` with `gitlab-ci-token`/`$CI_JOB_TOKEN`; secrets as masked+
+  protected `TF_VAR_*`; plan-on-MR via `reports: terraform`; Infrahub webhook → `POST …/trigger/pipeline?token=…&ref=main`
+  (`CI_PIPELINE_SOURCE == "trigger"`); apply auto on `main`/trigger (switch to `when: manual` to gate).
+- **Acceptance (reader):** merging a policy change triggers a green pipeline that applies to FMC.
   Blog: `blog/part-4-the-pipeline.md`.
 
 ### Part 5 — Firewall rules as code (the payoff)

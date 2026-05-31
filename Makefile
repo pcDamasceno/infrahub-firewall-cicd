@@ -1,8 +1,12 @@
 BRANCH ?= fw-cicd-demo
 
-.PHONY: load-schema load-data verify
+.PHONY: load-base load-schema load-data verify
 
-load-schema:
+load-base:
+	uv run infrahubctl schema load schemas/base/location.yml schemas/base/ipam.yml schemas/base/dcim.yml \
+		--branch $(BRANCH) --wait 30
+
+load-schema: load-base
 	uv run infrahubctl schema load schemas/security.yml --branch $(BRANCH) --wait 30
 
 load-data:

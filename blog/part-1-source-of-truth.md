@@ -85,7 +85,7 @@ uv run infrahubctl version
 # Python SDK: v1.21.0
 ```
 
-We're targeting **Infrahub 1.9.3** with **infrahub-sdk / infrahubctl v1.21.0**.
+These are the versions resolved at the time of writing (Infrahub 1.9.3, infrahub-sdk v1.21.0); your `uv sync` may resolve a newer SDK since the pin is `>=1.17.0`.
 
 ### Auth and secrets — read this before you run anything
 
@@ -134,11 +134,11 @@ Every command from here carries `--branch fw-cicd-demo`. When you're happy, you 
 
 ## Load the schema
 
-**Order matters.** The security schema inherits from DCIM (`SecurityFirewall` is also a `DcimPhysicalDevice`), and DCIM in turn references location and IPAM. So the base schemas go in first, in dependency order — location, IPAM, then DCIM — and only then the security schema on top.
+**Order matters.** The security schema inherits from DCIM (`SecurityFirewall` is also a `DcimPhysicalDevice`), and DCIM in turn references location and IPAM. So the base schemas go in first, in dependency order — location, IPAM, then DCIM — and only then the security schema on top. The base schemas live in `schemas/base/` as pinned copies vendored from the OpsMill schema-library, so the repo is self-contained.
 
 ```bash
 uv run infrahubctl schema load \
-  base/location.yml base/ipam.yml base/dcim.yml \
+  schemas/base/location.yml schemas/base/ipam.yml schemas/base/dcim.yml \
   --branch fw-cicd-demo --wait 30
 # 3 schemas processed ... Schema updated on all workers.
 ```
@@ -245,6 +245,8 @@ Infrahub resolves `edge-policy` to the one `SecurityPolicy` with that name. Done
 > ```
 >
 > Now the server knows *exactly* which kind to resolve against. And because `name` is a uniqueness constraint, this is **idempotent** — the address already created in `data/10-addresses.yml` is matched, not duplicated. No second `web-server-01` appears.
+>
+> One caveat: the explicit `kind` + `data` form restates the peer's attributes (the `address` and `port` here), so those values now live in two files and can drift if you edit only one. That's fine for a demo, but in real use you'd want to centralize them.
 >
 > The pattern generalizes: **any time a many-relationship's peer is an abstract generic, use the explicit `kind` + `data` block.** When you meet another abstract peer in the schema, you'll recognize the symptom (validate-passes / load-fails) and reach for the same fix.
 

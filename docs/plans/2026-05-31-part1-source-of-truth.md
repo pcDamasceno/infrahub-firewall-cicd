@@ -11,8 +11,8 @@
 **Decomposition note:** This is the first of five sequential plans (one per series part). Parts 2–5 are roadmapped at the end of this document with goals and acceptance criteria; each gets its own fully-detailed plan written just-in-time, because Parts 2–5 depend on live-system work and the two validation spikes (GitLab-as-provider-registry; rule-rendering approach) whose exact commands cannot be honestly written before those spikes resolve.
 
 **Live-instance execution decisions (confirmed with user):**
-- **Auth:** reuse the existing config at `/home/pdamasceno/GIT/docker/schema-library/infrahubctl.toml`
-  (holds `server_address` + `api_token`) via `export INFRAHUBCTL_CONFIG=/home/pdamasceno/GIT/docker/schema-library/infrahubctl.toml`.
+- **Auth:** reuse the existing config at `<path-to>/schema-library/infrahubctl.toml`
+  (holds `server_address` + `api_token`) via `export INFRAHUBCTL_CONFIG=<path-to>/schema-library/infrahubctl.toml`.
   Never echo, copy, or commit the token. (Rotation deferred by user; still recommended before publishing.)
 - **Target:** all schema + data loads go to a dedicated Infrahub branch **`fw-cicd-demo`**, NOT `main`.
   The user reviews in the UI and merges to main themselves. This makes every load reversible.
@@ -57,7 +57,7 @@ dependencies = [
 
 - [ ] **Step 2: Resolve the environment**
 
-Run: `cd /home/pdamasceno/GIT/docker/infrahub-firewall-cicd && uv sync`
+Run: `cd <path-to>/infrahub-firewall-cicd && uv sync`
 Expected: a `.uv`/virtualenv is created and `infrahub-sdk` installs without error.
 
 - [ ] **Step 3: Verify `infrahubctl` runs in this repo**
@@ -81,14 +81,14 @@ git commit -m "chore: pin infrahub-sdk so infrahubctl runs in-repo"
 - [ ] **Step 1: Point infrahubctl at the existing config (no secret handling)**
 
 ```bash
-export INFRAHUBCTL_CONFIG=/home/pdamasceno/GIT/docker/schema-library/infrahubctl.toml
+export INFRAHUBCTL_CONFIG=<path-to>/schema-library/infrahubctl.toml
 ```
 This file already holds `server_address` + `api_token`. Do not print, copy, or commit it.
 
 - [ ] **Step 2: Confirm the SDK can reach the instance**
 
 Run: `uv run infrahubctl info`
-Expected: shows the configured address `https://infrahub.autonetops.com` and a successful status (no auth/connection error).
+Expected: shows the configured address `https://your-infrahub.example.com` and a successful status (no auth/connection error).
 
 - [ ] **Step 3: Confirm `infrahubctl.toml` is git-ignored**
 
@@ -121,7 +121,7 @@ guarantees the security schema will load. Order matters: location + ipam before 
 
 Run:
 ```bash
-SL=/home/pdamasceno/GIT/docker/schema-library
+SL=<path-to>/schema-library
 uv run infrahubctl schema load $SL/base/location.yml $SL/base/ipam.yml $SL/base/dcim.yml \
   --branch fw-cicd-demo --wait 30
 ```
@@ -141,7 +141,7 @@ Expected: load reports success / converged (or "no changes").
 Run:
 ```bash
 mkdir -p schemas
-cp /home/pdamasceno/GIT/docker/schema-library/experimental/security/security.yml schemas/security.yml
+cp <path-to>/schema-library/experimental/security/security.yml schemas/security.yml
 ```
 Expected: `schemas/security.yml` exists and is identical to the source.
 

@@ -10,7 +10,12 @@
 
 **Decomposition note:** This is the first of five sequential plans (one per series part). Parts 2–5 are roadmapped at the end of this document with goals and acceptance criteria; each gets its own fully-detailed plan written just-in-time, because Parts 2–5 depend on live-system work and the two validation spikes (GitLab-as-provider-registry; rule-rendering approach) whose exact commands cannot be honestly written before those spikes resolve.
 
-**Prerequisite (out of band):** Rotate the Infrahub API token currently exposed in plaintext in `schema-library/infrahubctl.toml`; use the new token only via env vars below.
+**Live-instance execution decisions (confirmed with user):**
+- **Auth:** reuse the existing config at `/home/pdamasceno/GIT/docker/schema-library/infrahubctl.toml`
+  (holds `server_address` + `api_token`) via `export INFRAHUBCTL_CONFIG=/home/pdamasceno/GIT/docker/schema-library/infrahubctl.toml`.
+  Never echo, copy, or commit the token. (Rotation deferred by user; still recommended before publishing.)
+- **Target:** all schema + data loads go to a dedicated Infrahub branch **`fw-cicd-demo`**, NOT `main`.
+  The user reviews in the UI and merges to main themselves. This makes every load reversible.
 
 ---
 
@@ -26,6 +31,7 @@
 | `data/30-policy.yml` | The `SecurityPolicy` object |
 | `data/40-rules.yml` | `SecurityPolicyRule` objects (one permit, one deny) referencing the above |
 | `data/50-firewall.yml` | `SecurityFirewall` device bound to the policy |
+| `verify.py` | SDK script that prints counts of loaded Security objects (used by `make verify`) |
 | `blog/part-1-source-of-truth.md` | The Part 1 post |
 | `Makefile` | Convenience targets: `make load-schema`, `make load-data`, `make verify` |
 
@@ -72,12 +78,12 @@ git commit -m "chore: pin infrahub-sdk so infrahubctl runs in-repo"
 
 **Files:** none (environment only)
 
-- [ ] **Step 1: Export credentials (use the rotated token)**
+- [ ] **Step 1: Point infrahubctl at the existing config (no secret handling)**
 
 ```bash
-export INFRAHUB_ADDRESS="https://infrahub.autonetops.com"
-export INFRAHUB_API_TOKEN="<rotated-token>"   # never commit this
+export INFRAHUBCTL_CONFIG=/home/pdamasceno/GIT/docker/schema-library/infrahubctl.toml
 ```
+This file already holds `server_address` + `api_token`. Do not print, copy, or commit it.
 
 - [ ] **Step 2: Confirm the SDK can reach the instance**
 
@@ -99,31 +105,29 @@ The security schema inherits from / references `DcimGenericDevice`, `DcimPhysica
 `DcimInterface`, `DcimEndpoint`, `IpamIPAddress`, `IpamPrefix`, `LocationGeneric`,
 `CoreArtifactTarget`. These must already be present before `security.yml` will load.
 
-**Files:** none (read-only verification)
+**Files:** none (branch creation + instance-side schema verification)
 
-- [ ] **Step 1: Query the instance schema for the required kinds**
+- [ ] **Step 1: Create the dedicated demo branch**
+
+Run: `uv run infrahubctl branch create fw-cicd-demo`
+Expected: branch `fw-cicd-demo` created (or already exists — fine to reuse). All later loads target this branch.
+
+- [ ] **Step 2: Ensure base-schema dependencies are present on the branch (idempotent)**
+
+The security schema inherits from `DcimGenericDevice`/`DcimPhysicalDevice`/`DcimInterface`/`DcimEndpoint`,
+`IpamIPAddress`/`IpamPrefix`, `LocationGeneric`, `CoreArtifactTarget`. Load the base schemas into the
+branch — this is a no-op diff if they already exist on `main` (branches inherit from main), and it
+guarantees the security schema will load. Order matters: location + ipam before dcim.
 
 Run:
 ```bash
-uv run infrahubctl schema list 2>/dev/null || \
-uv run infrahubctl graphql --query 'query { DcimGenericDevice { count } IpamIPAddress { count } LocationGeneric { count } }'
-```
-Expected: the query resolves (kinds exist). If a kind is missing, the GraphQL error will name it.
-
-- [ ] **Step 2: If any base kind is missing, load it from schema-library**
-
-Run (only for missing namespaces — load all three together so cross-references resolve):
-```bash
 SL=/home/pdamasceno/GIT/docker/schema-library
-uv run infrahubctl schema load $SL/base/location.yml $SL/base/ipam.yml $SL/base/dcim.yml --wait 30
+uv run infrahubctl schema load $SL/base/location.yml $SL/base/ipam.yml $SL/base/dcim.yml \
+  --branch fw-cicd-demo --wait 30
 ```
-Expected: the load reports success / converged. (Order matters: location and ipam before dcim.)
+Expected: load reports success / converged (or "no changes").
 
-- [ ] **Step 3: Re-run the Step 1 query to confirm all kinds resolve**
-
-Expected: no missing-kind errors.
-
-> No commit — verification + (possibly) instance-side schema load only.
+> No git commit — branch creation + instance-side schema load only.
 
 ---
 
@@ -141,28 +145,16 @@ cp /home/pdamasceno/GIT/docker/schema-library/experimental/security/security.yml
 ```
 Expected: `schemas/security.yml` exists and is identical to the source.
 
-- [ ] **Step 2: Validate the schema file format**
+- [ ] **Step 2: Load the schema into the demo branch**
 
-Run: `uv run infrahubctl schema load schemas/security.yml --debug --wait 0` against a throwaway branch first:
-```bash
-uv run infrahubctl branch create fw-schema-test
-uv run infrahubctl schema load schemas/security.yml --branch fw-schema-test --wait 30
-```
-Expected: load succeeds on the test branch (proves base deps from Task 3 are satisfied).
+Run: `uv run infrahubctl schema load schemas/security.yml --branch fw-cicd-demo --wait 30`
+Expected: the branch reports the security kinds added / converged (proves base deps from Task 3 are satisfied). If it fails with a missing-kind error, return to Task 3.
 
-- [ ] **Step 3: Load into `main` and clean up the test branch**
+- [ ] **Step 3: Confirm the schema is loaded on the branch**
 
-Run:
-```bash
-uv run infrahubctl schema load schemas/security.yml --wait 30
-uv run infrahubctl branch delete fw-schema-test
-```
-Expected: `main` reports the security kinds added/converged.
-
-- [ ] **Step 4: Confirm the security kinds are queryable**
-
-Run: `uv run infrahubctl graphql --query 'query { SecurityPolicy { count } SecurityZone { count } SecurityFirewall { count } }'`
-Expected: all three resolve (count 0 is fine).
+Run: `uv run infrahubctl schema check schemas/security.yml --branch fw-cicd-demo`
+Expected: reports no changes / already in sync (proving the schema is present on the branch). If
+`schema check` instead reports it *would* add the kinds, the Step 2 load did not take — re-run it.
 
 - [ ] **Step 5: Commit**
 
@@ -197,8 +189,10 @@ spec:
 
 - [ ] **Step 2: Validate the object file**
 
-Run: `uv run infrahubctl object validate data/00-zones.yml`
-Expected: reports valid. If the format is rejected, adjust to the version the validator expects (it names the error), then re-run until valid.
+Run: `uv run infrahubctl object validate data/00-zones.yml --branch fw-cicd-demo`
+Expected: reports valid. (Validate on the demo branch — the `Security*` schema lives there, not on
+main.) If the format is rejected, adjust to the version the validator expects (it names the error),
+then re-run until valid.
 
 - [ ] **Step 3: Write `data/10-addresses.yml`**
 
@@ -234,12 +228,12 @@ spec:
 
 - [ ] **Step 5: Validate both new files**
 
-Run: `uv run infrahubctl object validate data/10-addresses.yml data/20-services.yml`
+Run: `uv run infrahubctl object validate data/10-addresses.yml data/20-services.yml --branch fw-cicd-demo`
 Expected: both valid.
 
-- [ ] **Step 6: Load zones, addresses, services into `main`**
+- [ ] **Step 6: Load zones, addresses, services into the demo branch**
 
-Run: `uv run infrahubctl object load data/00-zones.yml data/10-addresses.yml data/20-services.yml`
+Run: `uv run infrahubctl object load data/00-zones.yml data/10-addresses.yml data/20-services.yml --branch fw-cicd-demo`
 Expected: objects created (or "already exists" on re-run — idempotent for the demo).
 
 - [ ] **Step 7: Commit**
@@ -322,12 +316,12 @@ spec:
 
 - [ ] **Step 4: Validate all three files**
 
-Run: `uv run infrahubctl object validate data/30-policy.yml data/40-rules.yml data/50-firewall.yml`
+Run: `uv run infrahubctl object validate data/30-policy.yml data/40-rules.yml data/50-firewall.yml --branch fw-cicd-demo`
 Expected: all valid. Resolve any missing-required-field errors for `SecurityFirewall` per the Step 3 note.
 
 - [ ] **Step 5: Load in dependency order**
 
-Run: `uv run infrahubctl object load data/30-policy.yml data/40-rules.yml data/50-firewall.yml`
+Run: `uv run infrahubctl object load data/30-policy.yml data/40-rules.yml data/50-firewall.yml --branch fw-cicd-demo`
 Expected: policy, then rules (referencing zones/addresses/services/policy), then firewall — all created.
 
 - [ ] **Step 6: Commit**
@@ -342,38 +336,66 @@ git commit -m "feat(data): example policy, rules, and firewall device"
 ## Task 7: Add convenience Makefile and verify end-to-end
 
 **Files:**
-- Create: `Makefile`
+- Create: `verify.py`, `Makefile`
 
-- [ ] **Step 1: Write `Makefile`**
+- [ ] **Step 1: Write `verify.py`** (the SDK is the reliable way to query — there is no
+  `infrahubctl graphql --query`). It reads the same config as `infrahubctl` via `INFRAHUBCTL_CONFIG`,
+  so no token is handled separately.
+
+```python
+"""Print counts of the Security objects loaded on the demo branch."""
+import os
+import toml
+from infrahub_sdk import InfrahubClientSync, Config
+
+cfg = toml.load(os.environ["INFRAHUBCTL_CONFIG"])
+client = InfrahubClientSync(config=Config(address=cfg["server_address"], api_token=cfg["api_token"]))
+branch = os.environ.get("INFRAHUB_BRANCH", "fw-cicd-demo")
+
+for kind in [
+    "SecurityZone", "SecurityIPAddress", "SecurityService",
+    "SecurityPolicy", "SecurityPolicyRule", "SecurityFirewall",
+]:
+    print(f"{kind}: {len(client.all(kind, branch=branch))}")
+```
+
+> If the installed SDK (v1.21.0) uses a different `InfrahubClientSync`/`Config` signature, adjust
+> until `uv run python verify.py` runs cleanly and prints the counts — then keep the working form.
+
+- [ ] **Step 2: Write `Makefile`**
 
 ```make
+BRANCH ?= fw-cicd-demo
+
 .PHONY: load-schema load-data verify
 
 load-schema:
-	uv run infrahubctl schema load schemas/security.yml --wait 30
+	uv run infrahubctl schema load schemas/security.yml --branch $(BRANCH) --wait 30
 
 load-data:
 	uv run infrahubctl object load data/00-zones.yml data/10-addresses.yml data/20-services.yml \
-		data/30-policy.yml data/40-rules.yml data/50-firewall.yml
+		data/30-policy.yml data/40-rules.yml data/50-firewall.yml --branch $(BRANCH)
 
 verify:
-	uv run infrahubctl graphql --query 'query { SecurityPolicy { edges { node { name { value } rules { count } } } } }'
+	INFRAHUB_BRANCH=$(BRANCH) uv run python verify.py
 ```
 
-- [ ] **Step 2: Run the verification target**
+> The Makefile assumes `INFRAHUBCTL_CONFIG` is exported (Task 2, Step 1).
+
+- [ ] **Step 3: Run the verification target**
 
 Run: `make verify`
-Expected: returns `edge-policy` with `rules.count` >= 2.
+Expected: `SecurityPolicy: 1`, `SecurityPolicyRule: 2` (or more), and non-zero zones/addresses/services.
 
-- [ ] **Step 3: Reproducibility check (fresh-eyes dry run)**
+- [ ] **Step 4: Reproducibility check (fresh-eyes dry run)**
 
 Re-read Tasks 4–6 and confirm `make load-schema && make load-data && make verify` reproduces the full state from a clean instance branch. Note any manual step not captured by the Makefile and add it.
 
-- [ ] **Step 4: Commit**
+- [ ] **Step 5: Commit**
 
 ```bash
-git add Makefile
-git commit -m "chore: add Makefile for schema/data load + verify"
+git add verify.py Makefile
+git commit -m "chore: add verify.py + Makefile for schema/data load + verify"
 ```
 
 ---

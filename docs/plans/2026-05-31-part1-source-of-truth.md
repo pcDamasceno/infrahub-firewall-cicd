@@ -485,10 +485,11 @@ git commit -m "docs(blog): part 1 — the source of truth"
 - **Acceptance (reader):** merging a policy change triggers a green pipeline that applies to FMC.
   Blog: `blog/part-4-the-pipeline.md`.
 
-### Part 5 — Firewall rules as code (the payoff)
+### Part 5 — Firewall rules as code (the payoff) — DRAFTED (demo script)
 - **Goal:** Film/document the full day-2 loop.
-- **Key tasks:** Infrahub branch → edit a rule → proposed change → review → merge → webhook → pipeline →
-  rule on Firepower; capture screenshots/recording cues; recap; "what's next" (other vendors, drift
-  detection, rollback).
-- **Acceptance:** a single rule edit in Infrahub provably lands on Firepower through the pipeline.
-  Blog: `blog/part-5-rules-as-code.md`.
+- **Status:** Written — `blog/part-5-rules-as-code.md` as the on-camera recording script with shot
+  cues: Infrahub branch → add `allow-inside-to-dmz-ssh` rule → proposed change → review → merge →
+  webhook → pipeline (plan-on-MR → apply) → rule on Firepower; pre-flight checklist; "why it matters";
+  "what's next" (more vendors, group expansion via generator, drift detection, rollback); series index.
+- **Acceptance (reader, on camera):** a single rule edit in Infrahub lands on Firepower through the
+  pipeline. Blog: `blog/part-5-rules-as-code.md`.

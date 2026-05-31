@@ -1,0 +1,8 @@
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: SecurityPolicy
+  data:
+    - name: edge-policy
+      description: "Edge firewall policy (DMZ + inside)"

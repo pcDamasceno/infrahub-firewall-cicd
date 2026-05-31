@@ -1,0 +1,30 @@
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: SecurityPolicyRule
+  data:
+    - name: allow-inside-to-dmz-https
+      index: 10
+      action: permit
+      log: true
+      policy: edge-policy
+      source_zone: inside
+      destination_zone: dmz
+      destination_address:
+        - kind: SecurityIPAddress
+          data:
+            name: web-server-01
+            address: 10.10.20.10/32
+      destination_services:
+        - kind: SecurityService
+          data:
+            name: https
+            port: 443
+    - name: deny-outside-to-inside
+      index: 20
+      action: deny
+      log: true
+      policy: edge-policy
+      source_zone: outside
+      destination_zone: inside

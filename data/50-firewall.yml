@@ -1,0 +1,11 @@
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: SecurityFirewall
+  data:
+    - name: ftd-edge-01
+      role: edge_firewall
+      status: active
+      location: site_100
+      policy: edge-policy

@@ -166,8 +166,7 @@ Requirements on your build host: **Go** (1.24+ works), `golangci-lint`, and `gpg
 
 The template ships pointed at the author's own registry. Three changes make it yours.
 
-**1. The provider's registry address** (`main.go`). This must match the `source` your users
-will write. With a Terralist host `registry.example.com` and an authority (org) `netauto`:
+**1. The provider's registry address** (`main.go`). This must match the `source` your users will write. With a Terralist host `registry.example.com` and an authority (org) `netauto`:
 
 ```go
 opts := providerserver.ServeOpts{

@@ -1,7 +1,7 @@
 # Firewall rules as code — GitLab CI pipeline (Part 4)
 #
 # Reads policy from Infrahub and applies it to Cisco Firepower (FMC) via the
-# dual-provider Terraform config in ../terraform.
+# dual-provider Terraform/OpenTofu config in ../terraform.
 #
 # SETUP (see gitlab/README.md):
 #   - Project ▸ Settings ▸ CI/CD ▸ "CI/CD configuration file" = gitlab/.gitlab-ci.yml
@@ -11,7 +11,7 @@
 #     TF_VAR_fmc_url, TF_VAR_fmc_username, TF_VAR_fmc_password.
 #   - State is GitLab-managed (HTTP backend); no extra config needed in CI.
 #
-# Shortcut alternative: include the Terraform CI/CD component instead of these
+# Shortcut alternative: include the OpenTofu CI/CD component instead of these
 # explicit jobs — see gitlab/README.md.
 
 stages:
@@ -26,7 +26,7 @@ variables:
 
 default:
   image:
-    name: hashicorp/terraform:1.15.5
+    name: ghcr.io/opentofu/opentofu:1.9.0
     entrypoint: [""]
   cache:
     key: "${TF_STATE_NAME}"
@@ -34,8 +34,8 @@ default:
       - ${TF_ROOT}/.terraform
   before_script:
     - cd "${TF_ROOT}"
-    - terraform --version
-    - terraform init
+    - tofu --version
+    - tofu init
         -backend-config="address=${TF_ADDRESS}"
         -backend-config="lock_address=${TF_ADDRESS}/lock"
         -backend-config="unlock_address=${TF_ADDRESS}/lock"
@@ -48,14 +48,14 @@ default:
 validate:
   stage: validate
   script:
-    - terraform fmt -check -recursive
-    - terraform validate
+    - tofu fmt -check -recursive
+    - tofu validate
 
 plan:
   stage: plan
   script:
-    - terraform plan -out="planfile"
-    - terraform show -json "planfile" > "plan.json"
+    - tofu plan -out="planfile"
+    - tofu show -json "planfile" > "plan.json"
   artifacts:
     paths:
       - ${TF_ROOT}/planfile
@@ -69,7 +69,7 @@ plan:
 apply:
   stage: apply
   script:
-    - terraform apply -auto-approve "planfile"
+    - tofu apply -auto-approve "planfile"
   dependencies:
     - plan
   environment:
